@@ -1,0 +1,83 @@
+image: maven:latest
+
+stages:
+    - build
+    - test
+    - package
+    - deploy
+
+build_job:
+    stage: build
+    tags:
+        - docker
+
+    #Brett here, Instead of relying on the mvn command directly, I considered using the Maven Wrapper (mvnw). 
+    #This allows you to specify the Maven version used in the project and ensures that everyone building the project is using the same Maven version.
+
+    script:
+        - echo "Maven compile started"
+        - "./mvnw compile"
+
+test_job:
+    stage: test
+    tags:
+        - docker
+
+        #changed to mvnw here
+    script:
+        - echo "Maven test started"
+        - "./mvnw test"
+
+package_job:
+    stage: package
+    tags:
+        - docker
+
+        #changed to mvnw here as well
+    script:
+        - echo "Maven package started"
+        - "./mvnw package"
+
+#A possible way we could do CI/CD deployment instead, seperating the jobs into a copy job and a execute job 
+#this way, you can see if the file is successfully copied before attempting to execute it
+
+#deploy_copy_job:
+    #stage: deploy
+    #tags:
+    #    - docker
+    #script:
+    #    - echo "Copying JAR file to the server"
+    #    - scp -i $SSH_PRIVATE_KEY target/subme-0.0.1.jar $SSH_USER@$VM_IPADDRESS:target/subme-0.0.1.jar
+
+#deploy_execute_job:
+    #stage: deploy
+    #tags:
+    #    - docker
+    #script:
+    #    - echo "Executing JAR file on the server"
+    #    - ssh -i $SSH_PRIVATE_KEY $SSH_USER@$VM_IPADDRESS "java -jar subme-0.0.1.jar"
+
+deploy_job:
+    stage: deploy
+    tags:
+        - docker
+    
+    before_script:
+        - 'command -v ssh-agent >/dev/null || ( apk add --update openssh )' 
+        - eval $(ssh-agent -s)
+        - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
+        - mkdir -p ~/.ssh
+        - chmod 700 ~/.ssh
+        - ssh-keyscan $VM_IPADDRESS >> ~/.ssh/known_hosts
+        - chmod 644 ~/.ssh/known_hosts
+    
+    script:
+        - ssh $SSH_USER@$VM_IPADDRESS
+        - java -jar subme-0.0.1.jar
+
+
+    #Dont want to change it just in case but i believe the jar is in target/subme-0.0.1.jar which should be the specified path
+    #instead of public for the artifact
+    artifacts:
+        paths:
+            - target/subme-0.0.1.jar
